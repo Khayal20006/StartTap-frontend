@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,7 +10,7 @@ import {
 import { startupService, vacancyService, profileService, fileService } from '../services/api';
 import authService from '../services/authService';
 
-const CATEGORIES = ['SAAS', 'FINTECH'];
+const CATEGORIES = ['AI', 'ECOMMERCE', 'EDTECH', 'FINTECH', 'HEALTHTECH', 'MARKETPLACE', 'SAAS', 'DIGER'];
 const STAGES = ['IDEA', 'PRE_SEED', 'SEED', 'SERIES_A', 'SERIES_B_PLUS'];
 
 const Dashboard = () => {
@@ -31,9 +31,10 @@ const Dashboard = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
   const [applicants, setApplicants] = useState([]);
+  const [applicantVacancyId, setApplicantVacancyId] = useState(null);
 
   const [startupForm, setStartupForm] = useState({ name: '', description: '', tagline: '', category: 'SAAS', stage: 'IDEA', website: '' });
-  const [vacancyForm, setVacancyForm] = useState({ title: '', description: '', salary: '', startupId: '' });
+  const [vacancyForm, setVacancyForm] = useState({ title: '', description: '', salary: '', startupId: '', isActive: true });
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '', username: '', phoneNumber: '', linkedinUrl: '', githubUrl: '' });
 
   const user = authService.getCurrentUser();
@@ -72,7 +73,7 @@ const Dashboard = () => {
       setCv(cvRes.data);
 
       const myAppsRes = await vacancyService.getMyApplications();
-      setMyApplications(myAppsRes.data);
+      setMyApplications(myAppsRes.data.filter(a => a.status !== 'CANCELED'));
 
       const allVacancies = [];
       for (const startup of startupsRes.data) {
@@ -133,7 +134,7 @@ const Dashboard = () => {
     e.preventDefault();
     try {
       if (isEditMode) {
-        await startupService.update(selectedItem.id, startupForm);
+        await startupService.update(selectedItem.id, { ...startupForm, isActive: selectedItem.isActive ?? true });
         triggerToast('Uğurlu', 'Startap yeniləndi.');
       } else {
         await startupService.create(startupForm);
@@ -149,11 +150,13 @@ const Dashboard = () => {
   const handleVacancySubmit = async (e) => {
     e.preventDefault();
     try {
+      const { startupId, ...rest } = vacancyForm;
+      const salary = vacancyForm.salary ? Number(vacancyForm.salary) : null;
       if (isEditMode) {
-        await vacancyService.update(selectedItem.id, vacancyForm);
+        await vacancyService.update(selectedItem.id, { ...rest, salary });
         triggerToast('Uğurlu', 'Vakansiya yeniləndi.');
       } else {
-        await vacancyService.create(vacancyForm);
+        await vacancyService.create({ ...vacancyForm, salary });
         triggerToast('Uğurlu', 'Vakansiya dərc edildi!');
       }
       setIsVacancyModalOpen(false);
@@ -166,7 +169,12 @@ const Dashboard = () => {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await profileService.updateMe(profileForm);
+      const orig = originalProfileRef.current || {};
+      const data = { firstName: profileForm.firstName, lastName: profileForm.lastName, username: profileForm.username };
+      for (const key of ['phoneNumber','linkedinUrl','githubUrl']) {
+        if (profileForm[key] !== orig[key]) data[key] = profileForm[key];
+      }
+      const res = await profileService.updateMe(data);
       setProfile(res.data);
       triggerToast('Uğurlu', 'Profil yeniləndi.');
       setIsProfileModalOpen(false);
@@ -192,11 +200,11 @@ const Dashboard = () => {
 
   const openVacancyModal = (vacancy = null, startupId = null) => {
     if (vacancy) {
-      setVacancyForm({ title: vacancy.title, description: vacancy.description, salary: vacancy.salary || '', startupId: vacancy.startupId || vacancy.startup?.id || '' });
+      setVacancyForm({ title: vacancy.title, description: vacancy.description, salary: vacancy.salary ?? '', startupId: vacancy.startupId || vacancy.startup?.id || '', isActive: vacancy.isActive ?? true });
       setSelectedItem(vacancy);
       setIsEditMode(true);
     } else {
-      setVacancyForm({ title: '', description: '', salary: '', startupId: startupId || (startups[0]?.id || '') });
+      setVacancyForm({ title: '', description: '', salary: '', startupId: startupId || (startups[0]?.id || ''), isActive: true });
       setIsEditMode(false);
     }
     setIsVacancyModalOpen(true);
@@ -205,22 +213,61 @@ const Dashboard = () => {
   const viewApplicants = async (vacancyId) => {
     try {
       const res = await vacancyService.getApplications(vacancyId);
-      setApplicants(res.data);
+      setApplicants(res.data.filter(app => app.status !== 'CANCELED'));
+      setApplicantVacancyId(vacancyId);
       setIsApplicantModalOpen(true);
     } catch (err) {
       triggerToast('Xəta', 'Müraciətləri yükləmək mümkün olmadı.', 'error');
     }
   };
 
+  const handleUpdateStatus = async (applicationId, status) => {
+    try {
+      await vacancyService.updateApplicationStatus(applicationId, status);
+      triggerToast('Uğurlu', status === 'ACCEPTED' ? 'Müraciət qəbul edildi.' : 'Müraciət rədd edildi.');
+      viewApplicants(applicantVacancyId);
+    } catch (err) {
+      triggerToast('Xəta', 'Status yenilənə bilmədi.', 'error');
+    }
+  };
+
+  const handleViewApplicantCv = async (userId) => {
+    try {
+      const res = await profileService.getById(userId);
+      if (res.data?.cvUrl) {
+        window.open(res.data.cvUrl, '_blank');
+      } else {
+        triggerToast('Məlumat', 'Bu istifadəçinin CV-si yoxdur.', 'error');
+      }
+    } catch (err) {
+      triggerToast('Xəta', 'CV yüklənə bilmədi.', 'error');
+    }
+  };
+
+  const handleCancelMyApplication = async (jobId) => {
+    try {
+      await vacancyService.cancelApplication(jobId);
+      triggerToast('Uğurlu', 'Müraciətiniz ləğv edildi.');
+      fetchData();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Ləğv etmək mümkün olmadı.';
+      triggerToast('Xəta', typeof msg === 'string' ? msg : 'Ləğv etmək mümkün olmadı.', 'error');
+    }
+  };
+
+  const originalProfileRef = useRef(null);
+
   const openProfileModal = () => {
-    setProfileForm({
+    const vals = {
       firstName: profile?.firstName || '',
       lastName: profile?.lastName || '',
       username: profile?.username || user?.username || '',
       phoneNumber: profile?.phoneNumber || '',
       linkedinUrl: profile?.linkedinUrl || '',
       githubUrl: profile?.githubUrl || ''
-    });
+    };
+    originalProfileRef.current = { ...vals };
+    setProfileForm(vals);
     setIsProfileModalOpen(true);
   };
 
@@ -467,18 +514,28 @@ const Dashboard = () => {
                   <div className="space-y-3 md:space-y-4">
                     {myApplications.map(app => (
                       <motion.div key={app.id} layout initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        className="card !p-4 md:!p-6 flex items-center gap-3 md:gap-4"
+                        className="card !p-4 md:!p-6 flex items-center justify-between gap-3 md:gap-4"
                       >
-                        <div className="w-10 h-10 md:w-12 md:h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 border border-amber-200">
-                          <Send className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm md:text-base font-bold text-navy-950 truncate">{app.jobTitle}</h3>
-                          <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-600 font-medium mt-0.5">
-                            <span className="flex items-center gap-1">{statusIcon(app.status)} {statusLabel(app.status)}</span>
-                            {app.appliedAt && <span>{new Date(app.appliedAt).toLocaleDateString('az-AZ')}</span>}
+                        <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                          <div className="w-10 h-10 md:w-12 md:h-12 bg-amber-50 rounded-xl flex items-center justify-center shrink-0 border border-amber-200">
+                            <Send className="w-5 h-5 md:w-6 md:h-6 text-amber-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm md:text-base font-bold text-navy-950 truncate">{app.jobTitle}</h3>
+                            <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-600 font-medium mt-0.5">
+                              <span className="flex items-center gap-1">{statusIcon(app.status)} {statusLabel(app.status)}</span>
+                              {app.appliedAt && <span>{new Date(app.appliedAt).toLocaleDateString('az-AZ')}</span>}
+                            </div>
                           </div>
                         </div>
+                        {app.status === 'PENDING' && (
+                          <button
+                            onClick={() => handleCancelMyApplication(app.jobId)}
+                            className="px-3 py-1.5 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-xl hover:bg-amber-100 active:scale-95 transition-all shrink-0"
+                          >
+                            Ləğv et
+                          </button>
+                        )}
                       </motion.div>
                     ))}
                   </div>
@@ -740,7 +797,7 @@ const Dashboard = () => {
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 md:space-y-3 pr-1">
                 {applicants.length > 0 ? applicants.map((app, i) => (
-                  <div key={i} className="p-4 md:p-5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between hover:bg-white hover:shadow-sm transition-all">
+                  <div key={app.applicationId || i} className="p-4 md:p-5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between hover:bg-white hover:shadow-sm transition-all">
                     <div className="flex items-center gap-3 md:gap-4 min-w-0">
                       <div className="w-9 h-9 md:w-10 md:h-10 bg-emerald-600 rounded-xl flex items-center justify-center text-white font-black text-xs md:text-sm shadow-sm shrink-0">
                         {app.firstname?.[0]?.toUpperCase() || 'U'}
@@ -748,10 +805,40 @@ const Dashboard = () => {
                       <div className="min-w-0">
                         <p className="text-xs md:text-sm font-bold text-navy-950 truncate">{app.firstname} {app.lastname}</p>
                         <div className="flex flex-wrap items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-600 font-medium mt-0.5">
-                          <span className="truncate">{app.email}</span>
+                          <a href={`mailto:${app.email}`} className="truncate text-emerald-600 hover:text-emerald-700 hover:underline font-semibold">{app.email}</a>
                           <span className="flex items-center gap-1 shrink-0">{statusIcon(app.status)} {statusLabel(app.status)}</span>
                         </div>
                       </div>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0 ml-3">
+                      <a
+                        href={`mailto:${app.email}`}
+                        className="px-3 py-1.5 bg-navy-900 text-white text-[10px] font-bold rounded-xl hover:bg-navy-800 active:scale-95 transition-all inline-flex items-center"
+                      >
+                        Əlaqə
+                      </a>
+                      <button
+                        onClick={() => handleViewApplicantCv(app.userId)}
+                        className="px-3 py-1.5 bg-slate-700 text-white text-[10px] font-bold rounded-xl hover:bg-slate-600 active:scale-95 transition-all"
+                      >
+                        CV
+                      </button>
+                      {app.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => handleUpdateStatus(app.applicationId, 'ACCEPTED')}
+                            className="px-3 py-1.5 bg-emerald-600 text-white text-[10px] font-bold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all"
+                          >
+                            Qəbul et
+                          </button>
+                          <button
+                            onClick={() => handleUpdateStatus(app.applicationId, 'REJECTED')}
+                            className="px-3 py-1.5 bg-red-500 text-white text-[10px] font-bold rounded-xl hover:bg-red-600 active:scale-95 transition-all"
+                          >
+                            Rədd et
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )) : (

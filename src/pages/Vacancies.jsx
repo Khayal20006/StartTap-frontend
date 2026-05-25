@@ -1,15 +1,25 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Briefcase, DollarSign, Filter, ArrowRight, Sparkles, Building2, X, Clock, Eye } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Search, Briefcase, ArrowRight, X, Clock, Eye, Sparkles } from 'lucide-react';
 import { vacancyService } from '../services/api';
 import authService from '../services/authService';
 import DetailModal from '../components/DetailModal';
 import Pagination from '../components/Pagination';
 
 const ITEMS_PER_PAGE = 6;
+const CATEGORIES = ['Bütün', 'AI', 'ECOMMERCE', 'EDTECH', 'FINTECH', 'HEALTHTECH', 'MARKETPLACE', 'SAAS', 'DIGER'];
 
-const CATEGORIES = ['Bütün', 'SAAS', 'FINTECH'];
+const stagger = {
+  animate: {
+    transition: { staggerChildren: 0.06, delayChildren: 0.1 },
+  },
+};
+
+const fadeUp = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.16, 1, 0.3, 1] } },
+};
 
 const Vacancies = () => {
   const navigate = useNavigate();
@@ -18,15 +28,13 @@ const Vacancies = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Bütün');
   const [appliedIds, setAppliedIds] = useState(new Set());
-  const [toastMessage, setToastMessage] = useState({ title: '', sub: '', type: 'success' });
-  const [showToast, setShowToast] = useState(false);
   const [selectedVacancy, setSelectedVacancy] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [notification, setNotification] = useState(null);
 
-  const triggerToast = (title, sub, type = 'success') => {
-    setToastMessage({ title, sub, type });
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3500);
+  const createNotification = (title, message, type = 'success') => {
+    setNotification({ title, message, type });
+    setTimeout(() => setNotification(null), 4000);
   };
 
   useEffect(() => {
@@ -35,263 +43,214 @@ const Vacancies = () => {
         const res = await vacancyService.getAll();
         setVacancies(res.data);
       } catch (err) {
-        triggerToast('Xəta', 'Vakansiyaları yükləmək mümkün olmadı.', 'error');
+        createNotification('Xəta', 'Vakansiyaları yükləmək mümkün olmadı.', 'error');
       } finally {
         setLoading(false);
       }
     };
     fetchVacancies();
+
+    const user = authService.getCurrentUser();
+    if (user) {
+      vacancyService.getMyApplications()
+        .then(res => setAppliedIds(new Set(res.data.filter(a => a.status !== 'CANCELED').map(a => a.jobId))))
+        .catch(() => {});
+    }
   }, []);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, selectedCategory]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, selectedCategory]);
 
-  const filteredVacancies = vacancies.filter(v => {
-    const matchesSearch = (v.title?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (v.startup?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory = selectedCategory === 'Bütün' || v.startup?.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  }).sort((a, b) => (b.applicationCount || 0) - (a.applicationCount || 0));
+  const filtered = vacancies.filter(v => {
+    const m = (v.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+              (v.startup?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+    const c = selectedCategory === 'Bütün' || v.startup?.category === selectedCategory;
+    return m && c;
+  });
 
-  const totalPages = Math.ceil(filteredVacancies.length / ITEMS_PER_PAGE);
-  const pagedVacancies = filteredVacancies.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const handleApply = async (vacancyId) => {
+  const handleApply = async (id) => {
     const user = authService.getCurrentUser();
-    if (!user) {
-      triggerToast('Giriş lazımdır', 'Müraciət üçün əvvəlcə giriş etməlisiniz.', 'error');
-      return;
-    }
+    if (!user) { createNotification('Giriş lazımdır', 'Müraciət üçün giriş edin.', 'error'); return; }
     try {
-      await vacancyService.apply(vacancyId);
-      setAppliedIds(prev => new Set([...prev, vacancyId]));
-      triggerToast('Uğurlu müraciət!', 'Müraciətiniz komandaya göndərildi.');
+      await vacancyService.apply(id);
+      setAppliedIds(prev => new Set([...prev, id]));
+      createNotification('Uğurlu!', 'Müraciətiniz göndərildi.');
     } catch (err) {
       const msg = err.response?.data?.message || '';
       if (msg.includes('Artıq') || msg.includes('already') || msg.includes('mövcuddur')) {
-        setAppliedIds(prev => new Set([...prev, vacancyId]));
-        triggerToast('Artıq müraciət edilib', 'Bu vakansiyaya əvvəlcədən müraciət etmisiniz.', 'error');
+        setAppliedIds(prev => new Set([...prev, id]));
+        createNotification('Artıq müraciət edilib', '', 'error');
       } else {
-        triggerToast('Xəta', typeof msg === 'string' && msg ? msg : 'Müraciət mümkün olmadı.', 'error');
+        createNotification('Xəta', msg || 'Müraciət mümkün olmadı.', 'error');
       }
     }
   };
 
-  const handleCancelApplication = async (vacancyId) => {
+  const handleCancel = async (id) => {
     try {
-      await vacancyService.cancelApplication(vacancyId);
-      setAppliedIds(prev => {
-        const next = new Set(prev);
-        next.delete(vacancyId);
-        return next;
-      });
-      triggerToast('Ləğv edildi', 'Müraciətiniz geri götürüldü.');
+      await vacancyService.cancelApplication(id);
+      setAppliedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+      createNotification('Ləğv edildi', 'Müraciətiniz geri götürüldü.');
     } catch (err) {
-      triggerToast('Xəta', 'Müraciəti ləğv etmək mümkün olmadı.', 'error');
+      const msg = err.response?.data?.message || 'Ləğv etmək mümkün olmadı.';
+      createNotification('Xəta', msg, 'error');
     }
   };
 
   return (
-    <div className="min-h-screen pb-20 md:pb-24">
-      <AnimatePresence>
-        {showToast && (
+    <div className="min-h-screen pb-16 relative">
+      {/* Hero Header */}
+      <section className="relative py-20 md:py-28 overflow-hidden">
+        <div className="absolute inset-0">
+          <img
+            src="https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1600&q=80"
+            alt=""
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/85 via-emerald-900/80 to-teal-950/85" />
+        </div>
+        <div className="absolute top-[5%] left-[10%] w-[400px] h-[400px] bg-emerald-400/10 rounded-full blur-[140px] animate-pulse-glow" />
+        <div className="absolute bottom-[15%] right-[5%] w-[350px] h-[350px] bg-teal-300/8 rounded-full blur-[120px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 60, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
-            className="fixed bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 z-[100] 
-                       bg-navy-900 text-white px-5 md:px-7 py-3.5 md:py-4 rounded-2xl 
-                       shadow-2xl flex items-center gap-3 md:gap-4 border border-white/10
-                       min-w-[280px] md:min-w-[320px] max-w-[90vw]"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           >
-            <div className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              toastMessage.type === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
-            }`}>
-              <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-bold truncate">{toastMessage.title}</p>
-              <p className="text-xs text-slate-300 font-medium mt-0.5 line-clamp-1">{toastMessage.sub}</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <section className="relative pt-20 md:pt-24 pb-16 md:pb-20 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-white to-emerald-50/30" />
-        <div className="absolute top-1/4 right-1/4 w-[450px] h-[450px] bg-emerald-200/15 rounded-full blur-[140px] -z-10 animate-pulse-glow" />
-        <div className="absolute bottom-1/4 left-1/4 w-[350px] h-[350px] bg-teal-200/10 rounded-full blur-[120px] -z-10 animate-pulse-glow" style={{ animationDelay: '2s' }} />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="max-w-3xl">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-navy-950 mb-3 md:mb-4 leading-tight">
-              Karyeranıza<br /><span className="text-gradient">yeni nəfəs</span> verin
-            </h1>
-            <p className="text-base md:text-lg text-slate-700 mb-6 md:mb-8 max-w-xl leading-relaxed">
-              Azərbaycanın ən dinamik startaplarında vakansiyaları kəşf edin.
-            </p>
-            <div className="relative max-w-xl">
-              <Search className="absolute left-4 md:left-5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-600" />
-              <input
-                type="text"
-                placeholder="Vakansiya və ya startap adı..."
-                className="input-field !pl-11 md:!pl-14 !py-3.5 md:!py-4 text-sm md:text-base"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 mb-5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+              <span className="text-[10px] font-bold text-emerald-100 tracking-wider uppercase">Karyera İmkanları</span>
+            </motion.div>
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-2">Vakansiyalar</h1>
+            <p className="text-base md:text-lg text-emerald-100/80 max-w-xl font-medium">Azərbaycanın ən dinamik startaplarında vakansiyaları kəşf edin.</p>
           </motion.div>
         </div>
       </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row gap-6 md:gap-10">
-          <aside className="w-full lg:w-56 xl:w-60 shrink-0">
-            <div className="sticky top-24">
-              <div className="card p-5 md:p-6">
-                <div className="flex items-center gap-2 text-xs font-bold text-slate-600 uppercase tracking-wider mb-4 md:mb-5">
-                  <Filter className="w-3.5 h-3.5" /> Filtrlər
-                </div>
-                <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0">
-                  {CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`shrink-0 lg:w-full text-left px-4 py-2.5 md:py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                        selectedCategory === cat
-                          ? 'bg-navy-900 text-white'
-                          : 'text-slate-700 hover:bg-slate-100'
-                      }`}
-                    >
-                      {cat === 'Bütün' ? 'Bütün' : cat.charAt(0) + cat.slice(1).toLowerCase()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </aside>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-6 md:mb-8">
-              <h2 className="text-base md:text-lg font-bold text-navy-950">
-                {filteredVacancies.length} <span className="text-slate-600 font-medium">nəticə</span>
-                {totalPages > 1 && <span className="text-slate-400 font-medium"> — səhifə {currentPage}/{totalPages}</span>}
-              </h2>
-            </div>
-
-            {loading ? (
-              <div className="space-y-3 md:space-y-4">
-                {[1, 2, 3, 4].map(i => <div key={i} className="h-28 md:h-32 shimmer" />)}
-              </div>
-            ) : filteredVacancies.length > 0 ? (
-              <div className="space-y-3 md:space-y-4">
-                <AnimatePresence mode="popLayout">
-                  {pagedVacancies.map((v, i) => (
-                    <motion.div
-                      key={v.id}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.96 }}
-                      layout
-                      transition={{ delay: i * 0.03 }}
-                      onClick={() => setSelectedVacancy(v)}
-                      className="card p-5 md:p-6 cursor-pointer group"
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
-                        <div className="flex gap-3 md:gap-5 items-start min-w-0">
-                          <div className="w-10 h-10 md:w-14 md:h-14 bg-slate-50 rounded-xl flex items-center justify-center shrink-0 border border-slate-200">
-                            <Building2 className="w-5 h-5 md:w-7 md:h-7 text-slate-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 md:gap-3 mb-1 flex-wrap">
-                              <h3 className="text-base md:text-xl font-bold text-navy-950 truncate">{v.title}</h3>
-                              {appliedIds.has(v.id) ? (
-                                <span className="badge-amber text-[10px] uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                  <Clock className="w-3 h-3" /> Müraciət edilib
-                                </span>
-                              ) : (
-                                <span className="badge-green text-[10px] uppercase tracking-wider shrink-0">Aktiv</span>
-                              )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 md:gap-3 text-xs md:text-sm">
-                              <span className="font-bold text-emerald-600">{v.startup?.name || 'Anonim Startap'}</span>
-                              {v.startup?.category && (
-                                <span className="badge-slate text-[10px]">{v.startup.category}</span>
-                              )}
-                              {v.applicationCount !== undefined && (
-                                <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                                  <Clock className="w-3 h-3" /> {v.applicationCount} müraciət
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 shrink-0">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSelectedVacancy(v); }}
-                            className="w-10 h-10 md:w-11 md:h-11 bg-slate-100 hover:bg-slate-200 rounded-xl 
-                                       flex items-center justify-center text-slate-600
-                                       active:scale-90 transition-all duration-200"
-                            title="Ətraflı bax"
-                          >
-                            <Eye className="w-4 h-4 md:w-4.5 md:h-4.5" />
-                          </button>
-                          {appliedIds.has(v.id) ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleCancelApplication(v.id); }}
-                              className="inline-flex items-center gap-1.5 px-4 md:px-5 py-2.5 md:py-3 bg-amber-50 text-amber-700 
-                                         text-xs md:text-sm font-bold rounded-xl hover:bg-amber-100 border border-amber-200/50 
-                                         active:scale-90 transition-all"
-                            >
-                              <X className="w-3.5 h-3.5 md:w-4 md:h-4" /> Ləğv et
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleApply(v.id); }}
-                              className="btn-primary !rounded-xl px-5 md:px-6 py-2.5 md:py-3 text-xs md:text-sm"
-                            >
-                              Müraciət et <ArrowRight className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {v.description && (
-                        <p className="mt-4 md:mt-5 pt-4 md:pt-5 border-t border-slate-100 text-xs md:text-sm text-slate-700 leading-relaxed line-clamp-2">
-                          {v.description}
-                        </p>
-                      )}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="card-lg border-dashed border-slate-300 p-12 md:p-20 text-center"
-              >
-                <div className="w-16 h-16 md:w-20 md:h-20 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-5 md:mb-6 border border-slate-200">
-                  <Briefcase className="w-8 h-8 md:w-10 md:h-10 text-slate-500" />
-                </div>
-                <h3 className="text-xl md:text-2xl font-bold text-navy-950 mb-2">Heç bir vakansiya tapılmadı</h3>
-                <p className="text-xs md:text-sm text-slate-600 max-w-xs mx-auto">
-                  Axtarış meyarlarınıza uyğun nəticə yoxdur. Fərqli açar sözlərlə yoxlayın.
-                </p>
-              </motion.div>
-            )}
-            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-20">
+        {/* Filters */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="glass-card rounded-2xl p-4 md:p-5 mb-6 flex flex-col sm:flex-row gap-4"
+        >
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text" placeholder="Vakansiya və ya startap adı..."
+              className="input-simple !pl-10 !py-2.5 text-sm !rounded-xl"
+              value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+            />
           </div>
+          <div className="flex gap-2 overflow-x-auto">
+            {CATEGORIES.map(c => (
+              <button key={c} onClick={() => setSelectedCategory(c)}
+                className={`shrink-0 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                  selectedCategory === c ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+
+        <div className="flex items-center justify-between mb-4 px-1">
+          <p className="text-xs md:text-sm font-semibold text-slate-500">{filtered.length} nəticə</p>
         </div>
+
+        {loading ? (
+          <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-24 shimmer rounded-2xl" />)}</div>
+        ) : paged.length > 0 ? (
+          <motion.div
+            variants={stagger}
+            initial="initial"
+            animate="animate"
+            className="space-y-4"
+          >
+            {paged.map(v => (
+              <motion.div
+                key={v.id}
+                variants={fadeUp}
+                onClick={() => setSelectedVacancy(v)}
+                className="card p-5 md:p-6 cursor-pointer group"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex gap-4 items-start min-w-0">
+                    <div className="w-11 h-11 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                      <Briefcase className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="font-bold text-navy-950">{v.title}</h3>
+                        {appliedIds.has(v.id) ? (
+                          <span className="badge-amber text-[10px] flex items-center gap-1 shrink-0">
+                            <Clock className="w-3 h-3" /> Müraciət edilib
+                          </span>
+                        ) : (
+                          <span className="badge-emerald text-[10px] shrink-0">Aktiv</span>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-emerald-600">{v.startup?.name || 'Anonim'}</p>
+                      <p className="text-sm text-slate-600 line-clamp-1 mt-1">{v.description}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    {appliedIds.has(v.id) ? (
+                      <button onClick={(e) => { e.stopPropagation(); handleCancel(v.id); }}
+                        className="px-3 py-2 bg-amber-50 text-amber-700 text-sm font-bold rounded-xl hover:bg-amber-100 transition-all">
+                        <X className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <button onClick={(e) => { e.stopPropagation(); handleApply(v.id); }}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-all shadow-md shadow-emerald-500/15">
+                        Müraciət et
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <div className="text-center py-20">
+            <Briefcase className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+            <p className="text-slate-500 font-semibold">Heç bir vakansiya tapılmadı.</p>
+          </div>
+        )}
+
+        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
+      </div>
+
       <DetailModal
         isOpen={!!selectedVacancy}
         onClose={() => setSelectedVacancy(null)}
         vacancy={selectedVacancy}
         applied={selectedVacancy ? appliedIds.has(selectedVacancy.id) : false}
         onApply={handleApply}
-        onCancel={handleCancelApplication}
+        onCancel={handleCancel}
         onViewApplicants={() => navigate('/dashboard')}
       />
-      </div>
+
+      {notification && (
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          className={`fixed bottom-6 right-6 z-50 px-5 py-4 rounded-2xl shadow-xl border max-w-sm backdrop-blur-xl ${
+            notification.type === 'error' ? 'bg-red-50/90 border-red-200/80 text-red-800' : 'bg-emerald-50/90 border-emerald-200/80 text-emerald-800'
+          }`}
+        >
+          <p className="text-sm font-bold">{notification.title}</p>
+          {notification.message && <p className="text-xs mt-0.5 opacity-80">{notification.message}</p>}
+        </motion.div>
+      )}
     </div>
   );
 };

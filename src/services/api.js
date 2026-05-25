@@ -43,11 +43,12 @@ export const vacancyService = {
   getApplications: (vacancyId) => api.get(`/vacancies/${vacancyId}/applications`),
   cancelApplication: (vacancyId) => api.patch(`/vacancies/${vacancyId}/applications/cancel`),
   getMyApplications: () => api.get('/vacancies/my-applications'),
+  updateApplicationStatus: (applicationId, status) => api.patch(`/vacancies/applications/${applicationId}/status?status=${status}`),
 };
 
 export const profileService = {
   getMe: () => api.get('/profile/me'),
-  updateMe: (data) => api.put('/profile/me', data),
+  updateMe: (data) => api.patch('/profile/me', data),
   getById: (id) => api.get(`/profile/${id}`),
 };
 
@@ -62,6 +63,7 @@ export const fileService = {
   getMyCv: () => api.get('/files/my-cv'),
   delete: (publicId) => api.delete('/files/delete', { params: { publicId } }),
   previewCv: () => api.get('/files/preview-cv', { responseType: 'blob' }),
+  getUserCv: (userId) => api.get(`/files/user/${userId}/cv`),
 };
 
 export default api;

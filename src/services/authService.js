@@ -5,6 +5,7 @@ const authService = {
     const response = await api.post('/auth/login', { email, password });
     if (response.data.accessToken) {
       localStorage.setItem('token', response.data.accessToken);
+      if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
       const { accessToken, refreshToken, ...userData } = response.data;
       localStorage.setItem('user', JSON.stringify(userData));
     }
@@ -20,6 +21,7 @@ const authService = {
     const response = await api.get('/auth/verify', { params: { token } });
     if (response.data.accessToken) {
       localStorage.setItem('token', response.data.accessToken);
+      if (response.data.refreshToken) localStorage.setItem('refreshToken', response.data.refreshToken);
       const { accessToken, refreshToken, ...userData } = response.data;
       localStorage.setItem('user', JSON.stringify(userData));
     }
@@ -28,6 +30,7 @@ const authService = {
 
   logout: () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
   },
 
