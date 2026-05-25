@@ -26,7 +26,6 @@ const Home = () => {
   const navigate = useNavigate();
   const [vacancies, setVacancies] = useState([]);
   const [startups, setStartups] = useState([]);
-  const [vacancyCount, setVacancyCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingStartups, setLoadingStartups] = useState(true);
   const [appliedIds, setAppliedIds] = useState(new Set());
@@ -81,7 +80,6 @@ const Home = () => {
     const fetchVacancies = async () => {
       try {
         const res = await vacancyService.getAll();
-        setVacancyCount(res.data.length);
         setVacancies(res.data.slice(0, 6));
       } catch (err) {
         console.error(err);
@@ -241,9 +239,9 @@ const Home = () => {
           >
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
               {[
-                { label: 'Startap', value: startups.length || 0, icon: Rocket },
+                { label: 'Startap', value: '500+', icon: Rocket },
                 { label: 'İstifadəçi', value: '10k+', icon: Users },
-                { label: 'Vakansiya', value: vacancyCount || 0, icon: Briefcase },
+                { label: 'Vakansiya', value: '2.5k+', icon: Briefcase },
                 { label: 'Yatırım', value: '₼2M+', icon: Shield },
               ].map((stat, i) => {
                 const Icon = stat.icon;
