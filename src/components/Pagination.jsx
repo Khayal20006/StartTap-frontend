@@ -17,25 +17,25 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-xl 
-                   text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none
+        className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center
+                   text-emerald-100/50 hover:bg-white/5 disabled:opacity-20 disabled:pointer-events-none
                    transition-all"
       >
         <ChevronLeft className="w-4 h-4 md:w-5 md:h-5" />
       </button>
       {pages.map((page, i) =>
         page === '...' ? (
-          <span key={`e${i}`} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-xs text-slate-400 font-bold">
+          <span key={`e${i}`} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-xs text-emerald-100/30 font-bold">
             ...
           </span>
         ) : (
           <button
             key={page}
             onClick={() => onPageChange(page)}
-            className={`w-9 h-9 md:w-10 md:h-10 rounded-xl text-xs md:text-sm font-bold transition-all ${
+            className={`w-9 h-9 md:w-10 md:h-10 text-xs md:text-sm font-bold transition-all ${
               page === currentPage
-                ? 'bg-navy-900 text-white shadow-md'
-                : 'text-slate-700 hover:bg-slate-100'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20'
+                : 'text-emerald-100/60 hover:bg-white/5'
             }`}
           >
             {page}
@@ -45,8 +45,8 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-xl 
-                   text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none
+        className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center
+                   text-emerald-100/50 hover:bg-white/5 disabled:opacity-20 disabled:pointer-events-none
                    transition-all"
       >
         <ChevronRight className="w-4 h-4 md:w-5 md:h-5" />

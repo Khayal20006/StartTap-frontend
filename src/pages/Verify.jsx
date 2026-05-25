@@ -32,49 +32,46 @@ const Verify = () => {
   }, [token, navigate]);
 
   return (
-    <div className="min-h-[calc(100vh-64px)] md:min-h-[calc(100vh-80px)] flex items-center justify-center p-4 md:p-6 relative overflow-hidden bg-gradient-to-br from-slate-50/80 via-white to-emerald-50/30">
-      <div className="absolute top-1/4 left-1/3 w-[400px] h-[400px] bg-emerald-200/20 rounded-full blur-[150px] -z-10 animate-pulse-glow" />
+    <div className="min-h-[calc(100vh-64px)] md:min-h-[calc(100vh-80px)] flex items-center justify-center p-4 md:p-6 relative overflow-hidden">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white/80 backdrop-blur-xl rounded-[2.5rem] border border-white/50 shadow-[0_8px_32px_-8px_rgba(0,0,0,0.06)] p-8 md:p-12 text-center max-w-md relative overflow-hidden"
+        className="bg-white border border-ink-200 p-8 md:p-12 text-center max-w-md"
       >
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500" />
-
         {status === 'loading' && (
-          <div className="w-20 h-20 bg-emerald-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20">
+          <div className="w-20 h-20 bg-emerald-50 flex items-center justify-center mx-auto mb-6">
             <Loader2 className="w-10 h-10 text-emerald-600 animate-spin" />
           </div>
         )}
         {status === 'success' && (
-          <div className="w-20 h-20 bg-emerald-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/20 transform rotate-6">
+          <div className="w-20 h-20 bg-emerald-50 flex items-center justify-center mx-auto mb-6">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
           </div>
         )}
         {status === 'error' && (
-          <div className="w-20 h-20 bg-red-50 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <div className="w-20 h-20 bg-red-50 flex items-center justify-center mx-auto mb-6">
             <XCircle className="w-10 h-10 text-red-500" />
           </div>
         )}
 
-        <h2 className="text-3xl font-black tracking-tight text-navy-950 mb-3">
+        <h2 className="text-3xl font-black tracking-tight text-ink-900 mb-3">
           {status === 'loading' ? 'Təsdiqlənir...' : status === 'success' ? 'Uğurlu!' : 'Xəta baş verdi'}
         </h2>
         <p className="text-base text-slate-700 font-medium mb-10 leading-relaxed">{message}</p>
 
         {status === 'success' && (
-          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mb-8">
+          <div className="w-full h-1.5 bg-slate-100 overflow-hidden mb-8">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: '100%' }}
               transition={{ duration: 3, ease: 'linear' }}
-              className="h-full bg-emerald-500 rounded-full"
+              className="h-full bg-emerald-500"
             />
           </div>
         )}
 
         {status === 'error' && (
-          <Link to="/login" className="btn-primary !rounded-2xl">
+          <Link to="/login" className="btn-primary">
             Giriş səhifəsinə qayıt <ArrowRight className="w-5 h-5" />
           </Link>
         )}

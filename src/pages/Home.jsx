@@ -1,25 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { Search, ArrowRight, Users, Briefcase, Eye, X, Clock, Sparkles, Rocket, Lightbulb, Shield } from 'lucide-react';
+import { ArrowRight, Users, Briefcase, X, Clock, Rocket, Sparkles, Zap, Target, TrendingUp, Code, Lightbulb, Globe, ChevronDown } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { vacancyService, startupService } from '../services/api';
 import authService from '../services/authService';
 import DetailModal from '../components/DetailModal';
+import GradientText from '../components/GradientText';
+import Spotlight from '../components/Spotlight';
+import ShineButton from '../components/ShineButton';
+import NoiseOverlay from '../components/NoiseOverlay';
+import GlowCard from '../components/GlowCard';
+import Marquee from '../components/Marquee';
+import FloatingShapes from '../components/FloatingShapes';
+import GrowthChart from '../components/GrowthChart';
+import HeroIllustration from '../components/HeroIllustration';
 
-const stagger = {
-  animate: {
-    transition: { staggerChildren: 0.08, delayChildren: 0.1 },
-  },
-};
+const CountUp = ({ end, duration = 1.5, suffix = '' }) => {
+  const ref = useRef(null);
+  const [count, setCount] = useState(0);
 
-const fadeUp = {
-  initial: { opacity: 0, y: 24 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } },
-};
+  useEffect(() => {
+    if (!ref.current) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      let startTime;
+      const animate = (time) => {
+        if (!startTime) startTime = time;
+        const progress = Math.min((time - startTime) / (duration * 1000), 1);
+        setCount(Math.floor(end * progress));
+        if (progress < 1) requestAnimationFrame(animate);
+      };
+      requestAnimationFrame(animate);
+      observer.disconnect();
+    }, { threshold: 0.3 });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [end, duration]);
 
-const card3D = {
-  rest: { rotateX: 0, rotateY: 0, scale: 1 },
-  hover: { scale: 1.02, transition: { duration: 0.3 } },
+  return <span ref={ref}>{count}{suffix}</span>;
 };
 
 const Home = () => {
@@ -31,71 +49,31 @@ const Home = () => {
   const [appliedIds, setAppliedIds] = useState(new Set());
   const [selectedVacancy, setSelectedVacancy] = useState(null);
   const [selectedStartup, setSelectedStartup] = useState(null);
+  const [rocketExiting, setRocketExiting] = useState(false);
+  const [rocketPos, setRocketPos] = useState(null);
+  const rocketRef = useRef(null);
+  const user = authService.getCurrentUser();
   const [notification, setNotification] = useState(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   const heroRef = useRef(null);
-  const ecoRef = useRef(null);
-  const ctaRef = useRef(null);
-
-  const { scrollYProgress: heroProgress } = useScroll({
-    target: heroRef,
-    offset: ['start start', 'end start'],
-  });
-  const heroScale = useTransform(heroProgress, [0, 1], [1, 1.15]);
-  const heroY = useTransform(heroProgress, [0, 1], [0, 250]);
-
-  const { scrollYProgress: ecoProgress } = useScroll({
-    target: ecoRef,
-    offset: ['start end', 'center center'],
-  });
-  const clipReveal = useTransform(ecoProgress, [0, 1], [100, 0]);
-
-  const { scrollYProgress: ctaProgress } = useScroll({
-    target: ctaRef,
-    offset: ['start end', 'end start'],
-  });
-  const ctaScale = useTransform(ctaProgress, [0, 1], [1.1, 1]);
-  const ctaY = useTransform(ctaProgress, [0, 1], [-80, 80]);
-
-  useEffect(() => {
-    const handleMouse = (e) => {
-      setMousePos({ x: e.clientX / window.innerWidth - 0.5, y: e.clientY / window.innerHeight - 0.5 });
-    };
-    window.addEventListener('mousemove', handleMouse);
-    return () => window.removeEventListener('mousemove', handleMouse);
-  }, []);
-
-  const heroParallax = {
-    x: mousePos.x * -20,
-    y: mousePos.y * -20,
-  };
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] });
+  const heroY = useTransform(scrollYProgress, [0, 1], [0, 120]);
 
   const createNotification = (title, message, type = 'success') => {
     setNotification({ title, message, type });
-    setTimeout(() => setNotification(null), 4000);
+    setTimeout(() => setNotification(null), 3000);
   };
 
   useEffect(() => {
     const fetchVacancies = async () => {
-      try {
-        const res = await vacancyService.getAll();
-        setVacancies(res.data.slice(0, 6));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      try { const res = await vacancyService.getAll(); setVacancies(res.data.slice(0, 6)); }
+      catch (err) { console.error(err); }
+      finally { setLoading(false); }
     };
     const fetchStartups = async () => {
-      try {
-        const res = await startupService.getAll();
-        setStartups(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoadingStartups(false);
-      }
+      try { const res = await startupService.getAll(); setStartups(res.data); }
+      catch (err) { console.error(err); }
+      finally { setLoadingStartups(false); }
     };
     fetchVacancies();
     fetchStartups();
@@ -108,21 +86,33 @@ const Home = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (user || rocketExiting) return;
+    const el = rocketRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      const rect = el.getBoundingClientRect();
+      setRocketPos({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, w: rect.width, h: rect.height });
+      setRocketExiting(true);
+      setTimeout(() => navigate('/login'), 1500);
+    }, { threshold: 0.4 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [user, navigate, rocketExiting]);
+
   const handleApply = async (vacancyId) => {
     const user = authService.getCurrentUser();
-    if (!user) {
-      createNotification('Giriş lazımdır', 'Müraciət üçün əvvəlcə giriş etməlisiniz.', 'error');
-      return;
-    }
+    if (!user) { createNotification('Giriş lazımdır', 'Müraciət üçün giriş edin.', 'error'); return; }
     try {
       await vacancyService.apply(vacancyId);
       setAppliedIds(prev => new Set([...prev, vacancyId]));
-      createNotification('Uğurlu müraciət!', 'Müraciətiniz komandaya göndərildi.');
+      createNotification('Uğurlu!', 'Müraciətiniz komandaya göndərildi.');
     } catch (err) {
       const msg = err.response?.data?.message || '';
       if (msg.includes('Artıq') || msg.includes('already') || msg.includes('mövcuddur')) {
         setAppliedIds(prev => new Set([...prev, vacancyId]));
-        createNotification('Artıq müraciət edilib', 'Bu vakansiyaya əvvəlcədən müraciət etmisiniz.', 'error');
+        createNotification('Artıq müraciət edilib', '', 'error');
       } else {
         createNotification('Xəta', typeof msg === 'string' && msg ? msg : 'Müraciət mümkün olmadı.', 'error');
       }
@@ -132,488 +122,406 @@ const Home = () => {
   const handleCancelApplication = async (vacancyId) => {
     try {
       await vacancyService.cancelApplication(vacancyId);
-      setAppliedIds(prev => {
-        const next = new Set(prev);
-        next.delete(vacancyId);
-        return next;
-      });
+      setAppliedIds(prev => { const n = new Set(prev); n.delete(vacancyId); return n; });
       createNotification('Ləğv edildi', 'Müraciətiniz geri götürüldü.');
     } catch (err) {
-      const msg = err.response?.data?.message || 'Müraciəti ləğv etmək mümkün olmadı.';
-      createNotification('Xəta', msg, 'error');
+      createNotification('Xəta', err.response?.data?.message || 'Ləğv mümkün olmadı.', 'error');
     }
   };
 
   return (
-    <div className="min-h-screen pb-16 relative overflow-x-hidden">
+    <div className="min-h-screen">
       {/* Hero */}
-      <section ref={heroRef} className="relative min-h-[85vh] md:min-h-[90vh] flex items-center justify-center overflow-hidden">
-        <motion.div
-          className="absolute inset-0"
-          style={{ scale: heroScale, y: heroY }}
-        >
-          <motion.img
-            src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=1600&q=80"
-            alt=""
-            className="w-full h-full object-cover"
-            initial={{ scale: 1.1, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
-            style={{ x: heroParallax.x, y: heroParallax.y }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/90 via-emerald-900/85 to-teal-950/90" />
+      <section ref={heroRef} className="relative min-h-screen flex items-center bg-gradient-to-br from-emerald-950 via-[#0a2e2a] to-teal-950 overflow-hidden">
+        <NoiseOverlay />
+        <Spotlight />
+        <FloatingShapes count={10} />
+
+        {/* Gradient mesh */}
+        <div className="absolute inset-0 opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-emerald-500/20 rounded-full blur-[120px]" />
+          <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-teal-500/20 rounded-full blur-[120px]" />
+          <div className="absolute top-1/2 right-1/3 w-64 h-64 bg-emerald-300/10 rounded-full blur-[100px]" />
+        </div>
+
+        {/* Grid pattern */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: `linear-gradient(rgba(16,185,129,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.3) 1px, transparent 1px)`,
+          backgroundSize: '60px 60px',
+        }} />
+
+        <motion.div style={{ y: heroY }} className="relative z-10 w-full">
+          <div className="page-container">
+            <div className="flex flex-col lg:flex-row items-center gap-8 lg:gap-16 pt-28 md:pt-36 pb-16 md:pb-20">
+              <div className="flex-1 text-center lg:text-left">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <span className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full mb-6 md:mb-8">
+                    <Sparkles className="w-3 h-3 text-emerald-300" />
+                    <span className="text-[10px] font-bold text-emerald-100 uppercase tracking-[0.2em]">
+                      Azərbaycanın Startap Ekosistemi
+                    </span>
+                  </span>
+                </motion.div>
+
+                <motion.h1
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: 0.05 }}
+                  className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black text-white leading-[1.02] mb-4 md:mb-6"
+                >
+                  <span className="block">Gələcəyi</span>
+                  <GradientText as="span" className="block text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl">
+                    birlikdə quraq
+                  </GradientText>
+                </motion.h1>
+
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                  className="text-sm md:text-base lg:text-lg text-emerald-100/60 max-w-2xl mx-auto lg:mx-0 mb-10 md:mb-12 font-light leading-relaxed"
+                >
+                  İdeyalarınızı reallığa çevirmək üçün lazım olan hər şey — komanda, investor, alətlər — bir platformada.
+                </motion.p>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: 0.15 }}
+                  className="flex flex-col sm:flex-row items-center lg:justify-start gap-4"
+                >
+                  <Link to="/register"
+                    className="group relative inline-flex items-center gap-2 px-8 md:px-10 py-4 bg-emerald-500 text-white font-bold text-sm uppercase tracking-wider overflow-hidden
+                      shadow-lg shadow-emerald-500/30 hover:shadow-emerald-400/40 hover:-translate-y-0.5 transition-all duration-200">
+                    <span className="absolute inset-0 bg-gradient-to-r from-emerald-400/0 via-emerald-400/30 to-emerald-400/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                    <span className="relative z-10 flex items-center gap-2">
+                      İndi başla <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </span>
+                  </Link>
+                  <Link to="/vacancies"
+                    className="inline-flex items-center gap-2 px-8 md:px-10 py-4 bg-white/10 backdrop-blur-md text-white font-bold text-sm uppercase tracking-wider border border-white/30 hover:bg-white/20 hover:border-white/50 transition-all duration-200">
+                    Vakansiyaları kəşf et
+                  </Link>
+                </motion.div>
+
+                {/* Trust indicators */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3, delay: 0.25 }}
+                  className="flex items-center justify-center lg:justify-start gap-6 md:gap-10 mt-12 md:mt-16 pt-8 md:pt-10 border-t border-white/10"
+                >
+                  {[
+                    { icon: Users, text: '10k+ İstifadəçi' },
+                    { icon: Briefcase, text: '2.5k+ Vakansiya' },
+                    { icon: Rocket, text: '500+ Startap' },
+                  ].map((item, i) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-emerald-100/50 text-[10px] md:text-xs font-semibold uppercase tracking-wider">
+                        <Icon className="w-3.5 h-3.5 text-emerald-400" />
+                        {item.text}
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              </div>
+
+              <motion.div
+                className="w-full max-w-[320px] md:max-w-[420px] lg:max-w-[500px] shrink-0"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.15, duration: 0.4 }}
+              >
+                <HeroIllustration />
+              </motion.div>
+            </div>
+          </div>
         </motion.div>
 
-        <div className="absolute top-[8%] left-[3%] w-[600px] h-[600px] bg-emerald-400/10 rounded-full blur-[180px] animate-pulse-glow" />
-        <div className="absolute bottom-[10%] right-[5%] w-[500px] h-[500px] bg-teal-300/8 rounded-full blur-[160px] animate-pulse-glow" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-[30%] right-[30%] w-[400px] h-[400px] bg-emerald-300/6 rounded-full blur-[140px] animate-pulse-glow" style={{ animationDelay: '4s' }} />
-
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 60 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-          >
+        {/* Scroll indicator */}
+        <motion.div
+          animate={{ y: [0, 8, 0] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute bottom-6 md:bottom-8 left-1/2 -translate-x-1/2 z-10"
+        >
+          <div className="w-5 h-8 border-2 border-white/20 rounded-full flex justify-center">
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full border border-white/10 mb-6 md:mb-8"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
-              <span className="text-[11px] md:text-xs font-bold text-emerald-100 tracking-wider uppercase">Azərbaycanın Startap Ekosistemi</span>
-            </motion.div>
-
-            <h1 className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-black tracking-tight text-white leading-[1.05] mb-4 md:mb-6 overflow-hidden">
-              <motion.span
-                initial={{ opacity: 0, y: 80 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                className="block"
-              >
-                Gələcəyi
-              </motion.span>
-              <motion.span
-                initial={{ opacity: 0, y: 80 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.45, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                className="block text-gradient-light"
-              >
-                birlikdə quraq
-              </motion.span>
-            </h1>
-            <motion.p
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="text-base md:text-lg lg:text-xl text-emerald-100/80 max-w-2xl mx-auto mb-8 md:mb-10 font-medium leading-relaxed"
-            >
-              StartTap — İdeyalarınızı reallığa çevirmək üçün lazım olan hər şeyi bir araya gətirir.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.75, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4"
-            >
-              <Link to="/register" className="btn-primary !rounded-2xl !px-8 !py-4 text-base !shadow-[0_8px_30px_rgba(5,150,105,0.35)] hover:!shadow-[0_12px_40px_rgba(5,150,105,0.5)]">
-                İndi başla <ArrowRight className="w-5 h-5" />
-              </Link>
-              <Link to="/vacancies" className="btn-outline-light !rounded-2xl !px-8 !py-4 text-base">
-                Vakansiyaları kəşf et
-              </Link>
-            </motion.div>
-          </motion.div>
-        </div>
+              animate={{ y: [0, 10, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+              className="w-1 h-2 bg-emerald-400 rounded-full mt-2"
+            />
+          </div>
+        </motion.div>
       </section>
 
+      {/* Marquee */}
+      <div className="relative py-5 md:py-6 bg-ink-950 border-y border-emerald-900/30 overflow-hidden">
+        <Marquee
+          items={[
+            'Startap Ekosistemi', '•', 'İnnovasiya', '•', 'İnvestisiya', '•', 'Komanda', '•',
+            'Sürət', '•', 'Böyümə', '•', 'Texnologiya', '•', 'Gələcək', '•',
+            'Startap Ekosistemi', '•', 'İnnovasiya', '•', 'İnvestisiya', '•',
+          ]}
+          speed={40}
+        />
+      </div>
+
       {/* Stats */}
-      <section className="relative -mt-16 md:-mt-20 z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="glass-card rounded-[2rem] p-6 md:p-10"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
+      <section className="relative -mt-10 md:-mt-16 z-20">
+        <div className="page-container">
+          <div className="relative bg-white/95 backdrop-blur-sm border border-ink-200 shadow-2xl shadow-emerald-900/10 p-8 md:p-12 lg:p-16">
+            {/* Decorative corner accent */}
+            <div className="absolute top-0 left-0 w-16 h-1 bg-gradient-to-r from-emerald-500 to-emerald-400" />
+            <div className="absolute top-0 left-0 w-1 h-16 bg-gradient-to-b from-emerald-500 to-emerald-400" />
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12">
               {[
-                { label: 'Startap', value: '500+', icon: Rocket },
-                { label: 'İstifadəçi', value: '10k+', icon: Users },
-                { label: 'Vakansiya', value: '2.5k+', icon: Briefcase },
-                { label: 'Yatırım', value: '₼2M+', icon: Shield },
+                { label: 'Startap', value: 500, suffix: '+', icon: Rocket },
+                { label: 'İstifadəçi', value: 10, suffix: 'k+', icon: Users },
+                { label: 'Vakansiya', value: 2500, suffix: '+', icon: Briefcase },
+                { label: 'Yatırım', value: 2, suffix: 'M+ ₼', icon: Sparkles },
               ].map((stat, i) => {
                 const Icon = stat.icon;
                 return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: i * 0.12, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
-                    className="text-center group"
-                  >
-                    <div className="w-12 h-12 md:w-14 md:h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4 group-hover:bg-emerald-100 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                  <div key={i} className="text-center group">
+                    <div className="w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-3 md:mb-4 border border-emerald-200/50 group-hover:border-emerald-300 group-hover:shadow-lg group-hover:shadow-emerald-500/10 transition-all duration-300">
                       <Icon className="w-5 h-5 md:w-6 md:h-6 text-emerald-600" />
                     </div>
-                    <div className="text-2xl md:text-4xl font-black text-navy-950">{stat.value}</div>
-                    <div className="text-xs md:text-sm font-semibold text-slate-500 mt-0.5">{stat.label}</div>
-                  </motion.div>
+                    <div className="text-2xl md:text-3xl lg:text-5xl font-black text-gradient-emerald">
+                      <CountUp end={stat.value} suffix={stat.suffix} />
+                    </div>
+                    <div className="text-[10px] md:text-xs font-bold text-ink-500 uppercase tracking-wider mt-1">{stat.label}</div>
+                  </div>
                 );
               })}
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20 md:py-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-14 md:mb-18"
-          >
-            <motion.span
-              initial={{ scale: 0 }}
-              whileInView={{ scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-              className="badge-emerald mb-4 inline-block"
-            >
-              Niyə StartTap?
-            </motion.span>
-            <h2 className="text-3xl md:text-5xl font-black tracking-tight text-navy-950 mb-3">
-              Ekosistemimizin üstünlükləri
+      {/* Features - Bento Grid */}
+      <section className="py-20 md:py-28 lg:py-32 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-emerald-50/30 to-transparent" />
+        <FloatingShapes count={4} className="opacity-20" />
+        <div className="page-container relative z-10">
+          <div className="text-center mb-14 md:mb-20">
+            <div className="section-label">Niyə StartTap?</div>
+            <h2 className="section-title mt-3 mb-4">
+              Ekosistemin <GradientText>üstünlükləri</GradientText>
             </h2>
-            <p className="text-sm md:text-base text-slate-600 max-w-xl mx-auto font-medium">
+            <p className="section-sub max-w-xl mx-auto">
               Startaplar və istedadlar üçün hər şey bir yerdə.
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={stagger}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, amount: 0.2 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8"
-          >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             {[
-              { title: 'İldırım Sürəti', desc: 'Profilinizi saniyələr içində yaradın və dərhal kəşf etməyə başlayın.', icon: Rocket },
-              { title: 'Peşəkar Komanda', desc: 'Yüksək ixtisaslı mütəxəssisləri tapın və komandanızı gücləndirin.', icon: Users },
-              { title: 'Limitsiz İnkişaf', desc: 'Startapınızı böyütmək üçün lazım olan alətlər və dəstək.', icon: Lightbulb },
+              { title: 'İldırım Sürəti', desc: 'Profilinizi saniyələr içində yaradın. AI dəstəkli matching ilə dərhal kəşf etməyə başlayın.', icon: Zap, accent: 'from-amber-400 to-orange-500' },
+              { title: 'Peşəkar Komanda', desc: 'Yüksək ixtisaslı mütəxəssisləri tapın, komandanızı qurun və birlikdə böyüyün.', icon: Target, accent: 'from-blue-400 to-indigo-500' },
+              { title: 'Limitsiz İnkişaf', desc: 'Startapınızı böyütmək üçün investor şəbəkəsi, mentorluq və biznes alətlər.', icon: TrendingUp, accent: 'from-emerald-400 to-teal-500' },
             ].map((f, i) => {
               const Icon = f.icon;
               return (
-                <motion.div
-                  key={i}
-                  variants={fadeUp}
-                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
-                  className="glass-card rounded-2xl p-8 md:p-10 text-center group cursor-default relative overflow-hidden"
-                >
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  />
-                  <div className="relative">
-                    <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-5 md:mb-6 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 shadow-sm">
-                      <Icon className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
+                <GlowCard key={i}>
+                  <div className="relative card p-8 md:p-10 lg:p-12 text-center h-full overflow-hidden group">
+                    <div className={`absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                    <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-50 to-emerald-100 flex items-center justify-center mx-auto mb-5 md:mb-6 border border-emerald-200/50 group-hover:border-emerald-300/50 group-hover:scale-110 transition-all duration-300">
+                      <Icon className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
                     </div>
-                    <h3 className="text-lg md:text-xl font-bold text-navy-950 mb-2 md:mb-3">{f.title}</h3>
-                    <p className="text-sm md:text-base text-slate-600 leading-relaxed">{f.desc}</p>
+                    <h3 className="text-lg md:text-xl font-bold text-ink-900 uppercase tracking-tight mb-3 md:mb-4">{f.title}</h3>
+                    <p className="text-sm md:text-base text-ink-500 leading-relaxed font-medium">{f.desc}</p>
                   </div>
-                </motion.div>
+                </GlowCard>
               );
             })}
-          </motion.div>
+          </div>
+        </div>
+      </section>
 
-          <motion.div
-            ref={ecoRef}
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="card-lg mt-12 md:mt-16 overflow-hidden relative bg-white border-emerald-100/60"
-          >
-            <div className="absolute inset-0">
-              <motion.img
-                src="https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=1200&q=80"
-                alt=""
-                className="w-full h-full object-cover"
-                style={{ clipPath: useTransform(clipReveal, (v) => `inset(0 ${v}% 0 0)`) }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-white via-white/90 to-transparent" />
-            </div>
-            <div className="relative flex flex-col md:flex-row items-center gap-8 md:gap-12">
-              <div className="flex-1">
-                <motion.span
-                  initial={{ scale: 0 }}
-                  whileInView={{ scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.2, duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="badge-emerald mb-3 inline-block"
-                >
-                  Ekosistem
-                </motion.span>
-                <h2 className="text-2xl md:text-4xl font-black text-navy-950 mb-3 md:mb-4">StartTap ekosistemini kəşf edin</h2>
-                <p className="text-sm md:text-base text-slate-600 mb-5 md:mb-6 font-medium">Bizim missiyamız yerli ideyaların qlobal bazara çıxışını asanlaşdırmaqdır.</p>
-                <ul className="space-y-3">
-                  {['Geniş investor şəbəkəsi', 'Peşəkar mentor dəstəyi', 'İxtisaslaşmış vakansiya bazası'].map((item, i) => (
-                    <motion.li
-                      key={i}
-                      initial={{ opacity: 0, x: -20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: 0.3 + i * 0.1, duration: 0.4 }}
-                      className="flex items-center gap-3 text-sm font-semibold text-navy-800"
-                    >
-                      <div className="w-6 h-6 bg-emerald-100 rounded-lg flex items-center justify-center">
-                        <div className="w-2.5 h-2.5 bg-emerald-600 rounded-full" />
-                      </div>
-                      {item}
-                    </motion.li>
-                  ))}
-                </ul>
-              </div>
-              <div className="flex-1 w-full">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
-                  whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.4, duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
-                  className="relative bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-2xl p-8 md:p-10 text-center border border-emerald-100/40 backdrop-blur-sm"
-                >
-                  <Rocket className="w-16 h-16 md:w-20 md:h-20 text-emerald-600 mx-auto mb-4 animate-float" />
-                  <p className="text-base md:text-lg font-bold text-emerald-900">Azərbaycanın ən sürətli böyüyən startap icması</p>
-                </motion.div>
+      {/* Ecosystem Trust */}
+      <section className="py-16 md:py-20 bg-ink-900 relative overflow-hidden">
+        <NoiseOverlay className="opacity-[0.03]" />
+        <div className="page-container relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+              <div className="section-label text-emerald-400">Ekosistem</div>
+              <h2 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white mt-3 mb-4 leading-tight">
+                Böyüyən startap <GradientText>ekosisteminə</GradientText> qoşul
+              </h2>
+              <p className="text-base md:text-lg text-ink-400 max-w-md leading-relaxed mb-8">
+                Startaplar, investorlar və istedadlar bir araya gələrək Azərbaycanın ən sürətli böyüyən innovasiya mərkəzini yaradır.
+              </p>
+              <div className="grid grid-cols-2 gap-6">
+                {[
+                  { label: 'İllik artım', value: '240%' },
+                  { label: 'Aktiv startap', value: '50+' },
+                  { label: 'Yeni iş yeri', value: '1000+' },
+                  { label: 'İnvestisiya', value: '₼2M+' },
+                ].map((item, i) => (
+                  <div key={i} className="border-l-2 border-emerald-600/50 pl-4">
+                    <div className="text-xl md:text-2xl font-black text-gradient-emerald">{item.value}</div>
+                    <div className="text-[10px] md:text-xs text-ink-500 font-bold uppercase tracking-wider mt-1">{item.label}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          </motion.div>
+            <div className="bg-white/5 backdrop-blur-sm border border-emerald-900/30 p-6 md:p-8 lg:p-10">
+              <GrowthChart className="w-full h-48 md:h-56 lg:h-64" />
+            </div>
+          </div>
         </div>
       </section>
 
       {/* Active Startups */}
-      <section className="py-16 md:py-20 bg-slate-50/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5 }}
-            className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 md:mb-14"
-          >
+      <section className="py-20 md:py-24 lg:py-28 bg-ink-50 relative overflow-hidden">
+        <div className="page-container relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 md:mb-14">
             <div>
-              <motion.span
-                initial={{ scale: 0 }}
-                whileInView={{ scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
-                className="badge-emerald mb-3 inline-block"
-              >
-                Startaplar
-              </motion.span>
-              <h2 className="text-2xl md:text-4xl font-black tracking-tight text-navy-950">Fəal Startaplar</h2>
-              <p className="text-sm md:text-base text-slate-600 font-medium mt-1">Ən perspektivli layihələri kəşf edin.</p>
+              <div className="section-label">Startaplar</div>
+              <h2 className="section-title mt-2">Fəal Startaplar</h2>
+              <p className="section-sub mt-1">Ən perspektivli layihələri kəşf edin.</p>
             </div>
-            <Link to="/startups" className="btn-ghost text-sm font-bold group">
-              Hamısına bax <ArrowRight className="w-4 h-4 inline group-hover:translate-x-1 transition-transform" />
+            <Link to="/startups" className="group inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-600 hover:text-emerald-600 transition-colors duration-150">
+              Hamısına bax <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </Link>
-          </motion.div>
+          </div>
 
           {loadingStartups ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[1, 2, 3].map(i => <div key={i} className="h-44 shimmer" />)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[1, 2, 3].map(i => <div key={i} className="h-48 shimmer" />)}
             </div>
           ) : startups.length > 0 ? (
-            <motion.div
-              variants={stagger}
-              initial="initial"
-              whileInView="animate"
-              viewport={{ once: true, amount: 0.1 }}
-              className="grid grid-cols-1 md:grid-cols-3 gap-6"
-            >
-              {startups.slice(0, 3).map(s => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {startups.slice(0, 3).map((s, i) => (
                 <motion.div
                   key={s.id}
-                  variants={fadeUp}
-                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
-                  onClick={() => setSelectedStartup(s)}
-                  className="card p-6 md:p-8 cursor-pointer group relative overflow-hidden"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05, duration: 0.2 }}
                 >
-                  <motion.div
-                    className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-bl-[3rem] -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  />
-                  <div className="flex items-center gap-3 md:gap-4 mb-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-md group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
-                      {s.name?.[0] || 'S'}
+                  <GlowCard onClick={() => setSelectedStartup(s)}>
+                    <div className="card p-6 md:p-8 cursor-pointer">
+                      <div className="flex items-center gap-3 md:gap-4 mb-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-emerald-600/20">
+                          {s.name?.[0] || 'S'}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-ink-900 truncate text-base md:text-lg">{s.name}</h3>
+                          {s.stage && <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">{s.stage}</span>}
+                        </div>
+                      </div>
+                      <p className="text-sm text-ink-500 line-clamp-2 leading-relaxed font-medium">{s.description || 'Təsvir yoxdur'}</p>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="font-bold text-navy-950 truncate">{s.name}</h3>
-                      {s.stage && <span className="badge-emerald text-[10px]">{s.stage}</span>}
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">{s.description || 'Təsvir yoxdur'}</p>
+                  </GlowCard>
                 </motion.div>
               ))}
-            </motion.div>
+            </div>
           ) : (
-            <div className="text-center py-16 text-slate-500 font-semibold">Hələ startap yoxdur.</div>
+            <div className="text-center py-20 text-ink-400 font-semibold">Hələ startap yoxdur.</div>
           )}
         </div>
       </section>
 
       {/* Latest Vacancies */}
-      <section className="py-16 md:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ duration: 0.5 }}
-            className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 md:mb-14"
-          >
+      <section className="py-20 md:py-24 lg:py-28 relative overflow-hidden">
+        <FloatingShapes count={4} className="opacity-15" />
+        <div className="page-container relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 md:mb-14">
             <div>
-              <motion.span
-                initial={{ scale: 0 }}
-                whileInView={{ scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.3, ease: [0.34, 1.56, 0.64, 1] }}
-                className="badge-emerald mb-3 inline-block"
-              >
-                Vakansiyalar
-              </motion.span>
-              <h2 className="text-2xl md:text-4xl font-black tracking-tight text-navy-950">Ən Son İmkanlar</h2>
-              <p className="text-sm md:text-base text-slate-600 font-medium mt-1">Arzuladığınız iş bir klik uzaqlıqdadır.</p>
+              <div className="section-label">Vakansiyalar</div>
+              <h2 className="section-title mt-2">Ən Son İmkanlar</h2>
+              <p className="section-sub mt-1">Arzuladığınız iş bir klik uzaqlıqdadır.</p>
             </div>
-            <Link to="/vacancies" className="btn-ghost text-sm font-bold group">
-              Hamısına bax <ArrowRight className="w-4 h-4 inline group-hover:translate-x-1 transition-transform" />
+            <Link to="/vacancies" className="group inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-ink-600 hover:text-emerald-600 transition-colors duration-150">
+              Hamısına bax <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
             </Link>
-          </motion.div>
+          </div>
 
-          <motion.div
-            variants={stagger}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true, amount: 0.1 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
-          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {loading ? (
-              [1, 2, 3].map(i => <div key={i} className="h-44 shimmer rounded-2xl" />)
+              [1, 2, 3].map(i => <div key={i} className="h-52 shimmer" />)
             ) : (
-              vacancies.slice(0, 3).map(v => (
+              vacancies.slice(0, 3).map((v, i) => (
                 <motion.div
                   key={v.id}
-                  variants={fadeUp}
-                  whileHover={{ y: -8, transition: { duration: 0.3 } }}
-                  onClick={() => setSelectedVacancy(v)}
-                  className="card p-6 md:p-8 cursor-pointer group relative overflow-hidden"
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.05, duration: 0.2 }}
                 >
-                  <motion.div
-                    className="absolute top-0 left-0 w-20 h-20 bg-emerald-500/5 rounded-br-[3rem] -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  />
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <h3 className="font-bold text-navy-950">{v.title}</h3>
-                    {appliedIds.has(v.id) ? (
-                      <span className="badge-amber text-[10px] flex items-center gap-1 shrink-0">
-                        <Clock className="w-3 h-3" /> Gözləyir
-                      </span>
-                    ) : (
-                      <span className="badge-emerald text-[10px] shrink-0">Aktiv</span>
-                    )}
-                  </div>
-                  <p className="text-xs font-bold text-emerald-600 mb-2">{v.startup?.name || 'Anonim'}</p>
-                  <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed mb-4">{v.description}</p>
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                    <span className="text-sm font-black text-navy-950">{v.salary ? `${v.salary} ₼` : 'Razılaşma'}</span>
-                    {appliedIds.has(v.id) ? (
-                      <button onClick={(e) => { e.stopPropagation(); handleCancelApplication(v.id); }} className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-100 active:scale-95 transition-all">
-                        <X className="w-3 h-3" /> Ləğv et
-                      </button>
-                    ) : (
-                      <button onClick={(e) => { e.stopPropagation(); handleApply(v.id); }} className="inline-flex items-center gap-1 px-4 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-700 active:scale-95 transition-all shadow-md shadow-emerald-500/15">
-                        Müraciət et
-                      </button>
-                    )}
-                  </div>
+                  <GlowCard onClick={() => setSelectedVacancy(v)}>
+                    <div className="card p-6 md:p-8 cursor-pointer">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <h3 className="font-bold text-ink-900 text-base md:text-lg">{v.title}</h3>
+                        {appliedIds.has(v.id) ? (
+                          <span className="badge-amber text-[10px] flex items-center gap-1 shrink-0">
+                            <Clock className="w-3 h-3" /> Gözləyir
+                          </span>
+                        ) : (
+                          <span className="badge-emerald text-[10px] shrink-0">Aktiv</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2">{v.startup?.name || 'Anonim'}</p>
+                      <p className="text-sm text-ink-500 line-clamp-2 leading-relaxed font-medium mb-4">{v.description}</p>
+                      <div className="flex items-center justify-between pt-4 border-t border-ink-100">
+                        <span className="text-sm font-black text-ink-900">{v.salary ? `${v.salary} ₼` : 'Razılaşma'}</span>
+                        {appliedIds.has(v.id) ? (
+                          <button onClick={(e) => { e.stopPropagation(); handleCancelApplication(v.id); }}
+                            className="px-4 py-2 bg-amber-50 text-amber-700 text-xs font-bold hover:bg-amber-100 transition-colors duration-150">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <button onClick={(e) => { e.stopPropagation(); handleApply(v.id); }}
+                            className="px-5 py-2 bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 transition-all duration-150">
+                            Müraciət et
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </GlowCard>
                 </motion.div>
               ))
             )}
-          </motion.div>
+          </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section ref={ctaRef} className="relative py-20 md:py-28 overflow-hidden">
-        <motion.div
-          className="absolute inset-0"
-          style={{ scale: ctaScale, y: ctaY }}
-        >
-          <img
-            src="https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=1600&q=80"
-            alt=""
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-700/90 via-emerald-600/85 to-teal-700/90" />
-        </motion.div>
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-400/15 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/4 animate-pulse-glow" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-teal-300/12 rounded-full blur-[120px] translate-y-1/3 -translate-x-1/4 animate-pulse-glow" style={{ animationDelay: '2s' }} />
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <motion.div
-              initial={{ scale: 0 }}
-              whileInView={{ scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1, duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+      <section className="relative py-24 md:py-28 lg:py-36 bg-ink-900 overflow-hidden">
+        <NoiseOverlay className="opacity-[0.02]" />
+        <FloatingShapes count={8} className="opacity-10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/30 to-transparent" />
+
+        <div className="page-container text-center relative z-10">
+          <div className="max-w-3xl mx-auto">
+            <div ref={rocketRef}
+              className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-6 md:mb-8"
             >
-              <Rocket className="w-12 h-12 md:w-16 md:h-16 text-emerald-200 mx-auto mb-6 md:mb-8 animate-float" />
-            </motion.div>
-            <h2 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight text-white mb-3 md:mb-4">
-              <motion.span
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.2, duration: 0.6 }}
-                className="block"
-              >
-                Növbəti böyük ideyanı
-              </motion.span>
-              <motion.span
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.35, duration: 0.6 }}
-                className="block text-gradient-light"
-              >
-                indi reallaşdır.
-              </motion.span>
+              <Rocket className="w-7 h-7 md:w-8 md:h-8 text-emerald-400" />
+            </div>
+            <h2 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-black text-white mb-4 md:mb-6 leading-[1.05]">
+              Növbəti böyük ideyanı<br />
+              <GradientText>indi reallaşdır.</GradientText>
             </h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.5, duration: 0.5 }}
-              className="text-base md:text-lg text-emerald-100/80 mb-8 md:mb-10 font-medium"
-            >
-              Heç bir ödəniş etmədən qeydiyyatdan keçin.
-            </motion.p>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.65, duration: 0.5 }}
-            >
-              <Link to="/register" className="btn-primary !rounded-2xl !px-10 !py-4 md:!py-5 text-base md:text-lg !bg-white !text-emerald-800 hover:!bg-emerald-50 !shadow-[0_8px_30px_rgba(0,0,0,0.15)] hover:!shadow-[0_12px_40px_rgba(0,0,0,0.2)]">
-                Hesabını Yarat <ArrowRight className="w-5 h-5" />
-              </Link>
-            </motion.div>
-          </motion.div>
+            <p className="text-base md:text-lg text-ink-400 mb-10 md:mb-12 font-light max-w-lg mx-auto">
+              Heç bir ödəniş etmədən qeydiyyatdan keçin. Ekosistemə qoşulun, ideyanızı böyüdün.
+            </p>
+            <Link to="/register"
+              className="group relative inline-flex items-center gap-2 px-10 md:px-12 py-4 md:py-5 bg-white text-ink-900 font-bold text-sm uppercase tracking-wider overflow-hidden
+                shadow-2xl shadow-white/10 hover:shadow-emerald-500/20 hover:-translate-y-0.5 transition-all duration-200">
+              <span className="absolute inset-0 bg-gradient-to-r from-emerald-50 via-white to-emerald-50 -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+              <span className="relative z-10 flex items-center gap-2">
+                Hesabını Yarat
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </span>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -632,20 +540,95 @@ const Home = () => {
         startup={selectedStartup}
       />
 
+      {!user && rocketExiting && rocketPos && (
+        <div className="fixed inset-0 z-[300] pointer-events-none">
+          <motion.div
+            className="absolute"
+            style={{
+              left: rocketPos.x - rocketPos.w / 2,
+              top: rocketPos.y - rocketPos.h / 2,
+              width: rocketPos.w,
+              height: rocketPos.h,
+            }}
+            animate={{
+              y: -(rocketPos.y + window.innerHeight),
+              x: 0,
+              opacity: [1, 1, 0],
+              scale: [1, 0.8, 0.3],
+            }}
+            transition={{ duration: 1.2, ease: [0.45, 0, 0.55, 1] }}
+            className="bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center text-white"
+          >
+            <Rocket className="w-7 h-7 md:w-8 md:h-8" />
+          </motion.div>
+
+          {Array.from({ length: 40 }).map((_, i) => {
+            const angle = (i / 40) * 360;
+            const dist = 80 + Math.random() * 200;
+            const size = 3 + Math.random() * 6;
+            return (
+              <motion.div
+                key={i}
+                className="absolute rounded-full"
+                style={{
+                  left: rocketPos.x - size / 2,
+                  top: rocketPos.y - size / 2,
+                  width: size,
+                  height: size,
+                  backgroundColor: ['#10b981', '#34d399', '#059669', '#6ee7b7', '#fbbf24', '#f59e0b'][i % 6],
+                }}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                animate={{
+                  x: Math.cos((angle * Math.PI) / 180) * dist,
+                  y: Math.sin((angle * Math.PI) / 180) * dist - 100,
+                  opacity: [1, 0.8, 0],
+                  scale: [1, 2, 0],
+                }}
+                transition={{ duration: 0.8 + Math.random() * 0.6, delay: Math.random() * 0.2, ease: 'easeOut' }}
+              />
+            );
+          })}
+
+          <motion.div
+            className="absolute inset-0 flex flex-col items-center justify-center"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4, duration: 0.5 }}
+          >
+            <p className="text-white/80 text-sm md:text-base font-medium tracking-wide">
+              Kosmosa qalxmaq üçün
+            </p>
+            <p className="text-emerald-400 text-2xl md:text-4xl font-black tracking-tight mt-2">
+              Giriş edin
+            </p>
+            <motion.div
+              className="mt-4 md:mt-6 w-6 h-6 border-2 border-emerald-400/60 border-t-transparent rounded-full"
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            />
+          </motion.div>
+
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-t from-ink-950 via-emerald-950/50 to-ink-950"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.3 }}
+          />
+        </div>
+      )}
+
       {notification && (
-        <motion.div
-          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: 20, scale: 0.95 }}
-          className={`fixed bottom-6 right-6 z-50 px-5 py-4 rounded-2xl shadow-xl border max-w-sm backdrop-blur-xl ${
-            notification.type === 'error'
-              ? 'bg-red-50/90 border-red-200/80 text-red-800'
-              : 'bg-emerald-50/90 border-emerald-200/80 text-emerald-800'
-          }`}
+        <div
+          className="fixed bottom-4 md:bottom-6 right-4 md:right-6 z-50 px-4 py-3 border shadow-xl max-w-xs"
+          style={{
+            backgroundColor: notification?.type === 'error' ? '#fef2f2' : '#ecfdf5',
+            borderColor: notification?.type === 'error' ? '#fecaca' : '#a7f3d0',
+            color: notification?.type === 'error' ? '#991b1b' : '#065f46',
+          }}
         >
-          <p className="text-sm font-bold">{notification.title}</p>
-          {notification.message && <p className="text-xs mt-0.5 opacity-80">{notification.message}</p>}
-        </motion.div>
+          <p className="text-xs font-bold">{notification?.title}</p>
+          <p className="text-[10px] mt-0.5 opacity-80">{notification?.message}</p>
+        </div>
       )}
     </div>
   );
